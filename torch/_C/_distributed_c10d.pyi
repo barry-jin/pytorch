@@ -191,6 +191,22 @@ class TCPStore(Store):
     @property
     def port(self) -> int: ...
 
+class MemcachedStore(Store):
+    def __init__(
+        self,
+        host_name: str,
+        port: int,
+        world_size: Optional[int] = ...,
+        is_master: bool = ...,
+        timeout: timedelta = ...,
+        wait_for_workers: bool = ...,
+        multi_tenant: bool = ...,
+    ): ...
+    @property
+    def host(self) -> str: ...
+    @property
+    def port(self) -> int: ...
+
 class PrefixStore(Store):
     def __init__(self, prefix: str, store: Store): ...
     @property

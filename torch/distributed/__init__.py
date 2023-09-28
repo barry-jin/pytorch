@@ -27,6 +27,7 @@ if is_available():
         Store,
         FileStore,
         TCPStore,
+        MemcachedStore,
         ProcessGroup,
         Backend as _Backend,
         PrefixStore,

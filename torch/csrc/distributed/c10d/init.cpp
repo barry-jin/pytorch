@@ -4,6 +4,7 @@
 #include <c10/util/string_view.h>
 #include <torch/csrc/distributed/c10d/FileStore.hpp>
 #include <torch/csrc/distributed/c10d/TCPStore.hpp>
+#include <torch/csrc/distributed/c10d/MemcachedStore.hpp>
 #include <torch/csrc/distributed/c10d/Utils.hpp>
 #ifndef _WIN32
 #include <torch/csrc/distributed/c10d/HashStore.hpp>
@@ -1342,6 +1343,76 @@ Example::
           "port",
           &::c10d::TCPStore::getPort,
           R"(Gets the port number on which the store listens for requests.)");
+
+  intrusive_ptr_class_<::c10d::MemcachedStore>(
+      module,
+      "MemcachedStore",
+      store,
+      R"(
+A TCP-based distributed key-value store implementation. The memcached store holds
+the data, while the client stores can connect to the server store over TCP and
+perform actions such as :meth:`~torch.distributed.store.set` to insert a key-value
+pair, :meth:`~torch.distributed.store.get` to retrieve a key-value pair, etc. There
+should always be one server store initialized because the client store(s) will wait for
+the server to establish a connection.
+
+Arguments:
+    host_name (str): The hostname or IP Address the server store should run on.
+    port (int): The port on which the server store should listen for incoming requests.
+    world_size (int, optional): The total number of store users (number of clients + 1 for the server). Default is None (None indicates a non-fixed number of store users).
+    is_master (bool, optional): True when initializing the server store and False for client stores. Default is False.
+    timeout (timedelta, optional): Timeout used by the store during initialization and for methods such as :meth:`~torch.distributed.store.get` and :meth:`~torch.distributed.store.wait`. Default is timedelta(seconds=300)
+    wait_for_worker (bool, optional): Whether to wait for all the workers to connect with the server store. This is only applicable when world_size is a fixed value. Default is True.
+
+Example::
+    >>> import torch.distributed as dist
+    >>> from datetime import timedelta
+    >>> # Run on process 1 (server)
+    >>> server_store = dist.MemcachedStore("127.0.0.1", 1234, 2, True, timedelta(seconds=30))
+    >>> # Run on process 2 (client)
+    >>> client_store = dist.MemcachedStore("127.0.0.1", 1234, 2, False)
+    >>> # Use any of the store methods from either the client or server after initialization
+    >>> server_store.set("first_key", "first_value")
+    >>> client_store.get("first_key")
+      )")
+      .def(
+          py::init([](const std::string& host,
+                      uint16_t port,
+                      c10::optional<int> worldSize,
+                      bool isServer,
+                      std::chrono::milliseconds timeout,
+                      bool waitWorkers,
+                      bool multiTenant) {
+            c10::optional<std::size_t> numWorkers = c10::nullopt;
+            if (worldSize.has_value() && worldSize.value() > -1) {
+              numWorkers = static_cast<std::size_t>(worldSize.value());
+            }
+
+            ::c10d::MemcachedStoreOptions opts{
+                port, isServer, numWorkers, waitWorkers, timeout, multiTenant};
+
+            return c10::make_intrusive<::c10d::MemcachedStore>(host, opts);
+          }),
+          py::arg("host_name"),
+          py::arg("port"),
+          py::arg("world_size") = py::none(),
+          // using noconvert() requires this argument to be True or False
+          // prevents accidental implicit conversion to bool
+          py::arg("is_master").noconvert() = false,
+          py::arg("timeout") =
+              std::chrono::milliseconds(::c10d::Store::kDefaultTimeout),
+          py::arg("wait_for_workers") = true,
+          py::arg("multi_tenant") = false)
+      .def_property_readonly(
+          "host",
+          &::c10d::MemcachedStore::getHost,
+          R"(Gets the hostname on which the store listens for requests.)")
+
+      .def_property_readonly(
+          "port",
+          &::c10d::MemcachedStore::getPort,
+          R"(Gets the port number on which the store listens for requests.)");
+          
 
   intrusive_ptr_class_<::c10d::PrefixStore>(
       module,
